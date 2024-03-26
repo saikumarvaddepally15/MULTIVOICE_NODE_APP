@@ -1,15 +1,6 @@
 const fs = require('fs');
-const ffmpeg = require('fluent-ffmpeg');
 const path = require('path');
-
-function millisecondsToFFmpegTime(milliseconds) {
-    const totalSeconds = milliseconds / 1000;
-    const hours = Math.floor(totalSeconds / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
-    const seconds = Math.floor(totalSeconds % 60);
-    const millisecondsFormatted = Math.floor(milliseconds % 1000);
-    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${millisecondsFormatted.toString().padStart(3, '0')}`;
-}
+const ffmpeg = require('fluent-ffmpeg');
 
 async function extractAudio(segmentsData, outputDir, audioFilePath) {
     const userAudioMap = new Map(); // Map to store user-wise audio segments
@@ -23,33 +14,85 @@ async function extractAudio(segmentsData, outputDir, audioFilePath) {
         userAudioMap.get(user).push({ startTimeMs, endTimeMs });
     });
 
-    // Extract and save audio segments for each user
+    // Temporary directory for storing individual audio segments
+    const tempDir = path.join(outputDir, 'temp');
+    if (!fs.existsSync(tempDir)) {
+        fs.mkdirSync(tempDir);
+    }
+
+    // Extract and merge audio segments for each user
     for (const [user, segments] of userAudioMap.entries()) {
+        let tempFiles = [];
         for (const segment of segments) {
             const { startTimeMs, endTimeMs } = segment;
-            const outputFileName = `${user}_${startTimeMs}-${endTimeMs}.mp3`;
-            const outputPath = path.join(outputDir, outputFileName);
+            const tempFileName = `${user}_${startTimeMs}-${endTimeMs}.mp3`;
+            const tempFilePath = path.join(tempDir, tempFileName);
 
             const startTimeFFmpeg = millisecondsToFFmpegTime(startTimeMs);
             const endTimeFFmpeg = millisecondsToFFmpegTime(endTimeMs);
 
+            // Extract segment to temporary file
             await new Promise((resolve, reject) => {
                 ffmpeg(audioFilePath)
                     .setStartTime(startTimeFFmpeg)
                     .setDuration((endTimeMs - startTimeMs) / 1000) // Convert duration to seconds
-                    .output(outputPath)
+                    .output(tempFilePath)
                     .on('end', () => {
-                        console.log(`Segment processed for user ${user}: ${outputFileName}`);
+                        console.log(`Temporary segment processed for user ${user}: ${tempFileName}`);
                         resolve();
                     })
                     .on('error', (err) => {
-                        console.error(`Error processing segment for user ${user}:`, err);
+                        console.error(`Error processing temporary segment for user ${user}:`, err);
                         reject(err);
                     })
                     .run();
             });
+
+            tempFiles.push(tempFilePath);
         }
+
+        // Merge temporary files into a single output file for the user
+        const outputFileName = `${user}_merged.mp3`;
+        const outputPath = path.join(outputDir, outputFileName);
+
+        await mergeAudioFiles(tempFiles, outputPath);
+
+        // Cleanup temporary files
+        tempFiles.forEach(file => fs.unlinkSync(file));
     }
+
+    // Remove the temporary directory
+    fs.rmdirSync(tempDir);
+}
+
+// Helper function to merge audio files
+async function mergeAudioFiles(inputFiles, outputFile) {
+    return new Promise((resolve, reject) => {
+        let ffmpegCommand = ffmpeg();
+
+        inputFiles.forEach(file => {
+            ffmpegCommand = ffmpegCommand.input(file);
+        });
+
+        ffmpegCommand
+            .on('error', (err) => {
+                console.error('Error merging audio files:', err);
+                reject(err);
+            })
+            .on('end', () => {
+                console.log(`Merged audio file created: ${outputFile}`);
+                resolve();
+            })
+            .mergeToFile(outputFile, path.dirname(outputFile));
+    });
+}
+
+// Convert milliseconds to FFmpeg-compatible time format
+function millisecondsToFFmpegTime(milliseconds) {
+    const seconds = Math.floor(milliseconds / 1000);
+    const ms = milliseconds % 1000;
+    const formatted = new Date(seconds * 1000).toISOString().substr(11, 8) + '.' + ms.toString().padStart(3, '0');
+    return formatted;
 }
 
 
