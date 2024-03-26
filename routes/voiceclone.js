@@ -19,7 +19,7 @@ function clone() {
         const addUrl = "https://api.elevenlabs.io/v1/voices/add";
         const headers = {
             "Accept": "application/json",
-            "xi-api-key":"9cc80a1ca55d633d0f39ff7fd14013dc" // Assuming EL_TOKEN is stored as an environment variable
+            "xi-api-key":"" // Assuming EL_TOKEN is stored as an environment variable
         };
 
         const data = {
