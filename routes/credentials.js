@@ -8,8 +8,8 @@ const PORT = process.env.PORT || 3000;
 app.use(bodyParser.json());
 
  const credentials= async (req, res) => {
-    const el_token = "9cc80a1ca55d633d0f39ff7fd14013dc";
-    const openai_token = "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";
+    const el_token = "";
+    const openai_token = "";
     console.log(openai_token,el_token);
 
     if (!openai_token || !el_token) {
