@@ -3,6 +3,7 @@ const path = require('path');
 const axios = require('axios');
 
 function clone() {
+    
     const voiceClonesDir = 'voice_clones';
     const audioFiles = fs.readdirSync(voiceClonesDir);
     const voiceIdMap = {};
@@ -18,7 +19,7 @@ function clone() {
         const addUrl = "https://api.elevenlabs.io/v1/voices/add";
         const headers = {
             "Accept": "application/json",
-            "xi-api-key": process.env.EL_TOKEN // Assuming EL_TOKEN is stored as an environment variable
+            "xi-api-key":"9cc80a1ca55d633d0f39ff7fd14013dc" // Assuming EL_TOKEN is stored as an environment variable
         };
 
         const data = {

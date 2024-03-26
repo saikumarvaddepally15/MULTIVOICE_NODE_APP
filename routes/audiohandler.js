@@ -1,70 +1,58 @@
 const fs = require('fs');
-const path = require('path');
-const { exec } = require('child_process');
 const ffmpeg = require('fluent-ffmpeg');
-const { tts } = require('./tts'); // Import the TTS function from your tts module
+const path = require('path');
 
-ffmpeg.setFfmpegPath(require('@ffmpeg-installer/ffmpeg').path);
-
-// Function to extract and save audio segments for each user
 function millisecondsToFFmpegTime(milliseconds) {
     const totalSeconds = milliseconds / 1000;
     const hours = Math.floor(totalSeconds / 3600);
     const minutes = Math.floor((totalSeconds % 3600) / 60);
     const seconds = Math.floor(totalSeconds % 60);
     const millisecondsFormatted = Math.floor(milliseconds % 1000);
-
     return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${millisecondsFormatted.toString().padStart(3, '0')}`;
 }
 
 async function extractAudio(segmentsData, outputDir, audioFilePath) {
-    for (const segment of segmentsData) {
+    const userAudioMap = new Map(); // Map to store user-wise audio segments
+
+    // Aggregate audio segments for each user
+    segmentsData.forEach(segment => {
         const { user, start_time: startTimeMs, end_time: endTimeMs } = segment;
-        const outputFileName = `${user}.mp3`;
-        const outputPath = path.join(outputDir, outputFileName);
+        if (!userAudioMap.has(user)) {
+            userAudioMap.set(user, []);
+        }
+        userAudioMap.get(user).push({ startTimeMs, endTimeMs });
+    });
 
-        const startTimeFFmpeg = millisecondsToFFmpegTime(startTimeMs);
-        const endTimeFFmpeg = millisecondsToFFmpegTime(endTimeMs);
+    // Extract and save audio segments for each user
+    for (const [user, segments] of userAudioMap.entries()) {
+        for (const segment of segments) {
+            const { startTimeMs, endTimeMs } = segment;
+            const outputFileName = `${user}_${startTimeMs}-${endTimeMs}.mp3`;
+            const outputPath = path.join(outputDir, outputFileName);
 
-        await new Promise((resolve, reject) => {
-            ffmpeg(audioFilePath)
-                .setStartTime(startTimeFFmpeg)
-                .setDuration((endTimeMs - startTimeMs) / 1000) // Convert duration to seconds
-                .output(outputPath)
-                .on('end', () => {
-                    console.log('Segment processed for user:', user);
-                    resolve();
-                })
-                .on('error', (err) => {
-                    console.error('Error processing segment:', err);
-                    reject(err);
-                })
-                .run();
-        });
+            const startTimeFFmpeg = millisecondsToFFmpegTime(startTimeMs);
+            const endTimeFFmpeg = millisecondsToFFmpegTime(endTimeMs);
+
+            await new Promise((resolve, reject) => {
+                ffmpeg(audioFilePath)
+                    .setStartTime(startTimeFFmpeg)
+                    .setDuration((endTimeMs - startTimeMs) / 1000) // Convert duration to seconds
+                    .output(outputPath)
+                    .on('end', () => {
+                        console.log(`Segment processed for user ${user}: ${outputFileName}`);
+                        resolve();
+                    })
+                    .on('error', (err) => {
+                        console.error(`Error processing segment for user ${user}:`, err);
+                        reject(err);
+                    })
+                    .run();
+            });
+        }
     }
 }
 
 
-async function combineAudioFiles(inputFiles, outputFilePath) {
-    // Generate FFmpeg command to concatenate audio files
-    let ffmpegCommand = 'ffmpeg';
-    inputFiles.forEach((file) => {
-        ffmpegCommand += ` -i "${file.path}"`;
-    });
-    ffmpegCommand += ' -filter_complex "concat=n=' + inputFiles.length + ':v=0:a=1[out]" -map "[out]" -acodec libmp3lame -q:a 4 -y ' + outputFilePath;
-
-    // Execute FFmpeg command
-    return new Promise((resolve, reject) => {
-        exec(ffmpegCommand, (error, stdout, stderr) => {
-            if (error) {
-                console.error(`Error combining audio files: ${error}`);
-                reject(error);
-            }
-            console.log(`Audio files combined successfully: ${outputFilePath}`);
-            resolve();
-        });
-    });
-}
 
 async function generateAudio(dialogsJson, outputFilePath, audioFilePath) {
     const dialogs = JSON.parse(dialogsJson);

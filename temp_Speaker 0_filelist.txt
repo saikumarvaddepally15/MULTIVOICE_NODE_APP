@@ -1,0 +1,15 @@
+file '/Users/saikumarvaddepally/Desktop/AudioOne/mutliVoice_node_app/public/data/yt5s.com - UPDATE_ Lauren Boebert's future in Congress ROCKED by news (128 kbps).mp3'
+inpoint 00:00:00.080
+outpoint 00:00:00.08032.284
+file '/Users/saikumarvaddepally/Desktop/AudioOne/mutliVoice_node_app/public/data/yt5s.com - UPDATE_ Lauren Boebert's future in Congress ROCKED by news (128 kbps).mp3'
+inpoint 00:00:32.905
+outpoint 00:00:32.90521.07
+file '/Users/saikumarvaddepally/Desktop/AudioOne/mutliVoice_node_app/public/data/yt5s.com - UPDATE_ Lauren Boebert's future in Congress ROCKED by news (128 kbps).mp3'
+inpoint 00:02:04.060
+outpoint 00:02:04.06029.4
+file '/Users/saikumarvaddepally/Desktop/AudioOne/mutliVoice_node_app/public/data/yt5s.com - UPDATE_ Lauren Boebert's future in Congress ROCKED by news (128 kbps).mp3'
+inpoint 00:02:33.840
+outpoint 00:02:33.84021.94
+file '/Users/saikumarvaddepally/Desktop/AudioOne/mutliVoice_node_app/public/data/yt5s.com - UPDATE_ Lauren Boebert's future in Congress ROCKED by news (128 kbps).mp3'
+inpoint 00:02:55.955
+outpoint 00:02:55.9552.66
