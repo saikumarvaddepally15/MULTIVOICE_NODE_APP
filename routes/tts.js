@@ -1,14 +1,15 @@
 const axios = require('axios');
-const { Readable } = require('stream');
-const { spawn } = require('child_process');
-
-async function tts(id, text, elToken) {
+const fs = require('fs').promises;
+const el_token = process.env.ELEVEN_LABS;
+const os = require('os');
+const path = require('path');
+async function tts(id, text) {
     const url = `https://api.elevenlabs.io/v1/text-to-speech/${id}`;
 
     const headers = {
         'Accept': 'audio/mpeg',
         'Content-Type': 'application/json',
-        'xi-api-key': elToken
+        'xi-api-key': el_token
     };
 
     const data = {
@@ -21,32 +22,12 @@ async function tts(id, text, elToken) {
     };
 
     try {
-        const response = await axios.post(url, data, { headers: headers, responseType: 'stream' });
-        if (response.status === 200) {
-            const audioStream = response.data;
-            const audioBuffer = await streamToBuffer(audioStream);
-            return audioBuffer;
-        } else {
-            throw new Error('Failed to fetch TTS audio');
-        }
+        const response = await axios.post(url, data, { headers: headers, responseType: 'arraybuffer' });
+        return Buffer.from(response.data);
     } catch (error) {
+        console.error('Failed to fetch TTS audio:', error);
         throw new Error('Failed to fetch TTS audio');
     }
-}
-
-async function streamToBuffer(stream) {
-    const chunks = [];
-    return new Promise((resolve, reject) => {
-        stream.on('data', (chunk) => {
-            chunks.push(chunk);
-        });
-        stream.on('end', () => {
-            resolve(Buffer.concat(chunks));
-        });
-        stream.on('error', (error) => {
-            reject(error);
-        });
-    });
 }
 
 module.exports = { tts };

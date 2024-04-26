@@ -1,60 +1,66 @@
 const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
+const FormData = require('form-data');
 
-function clone() {
-    
-    const voiceClonesDir = 'voice_clones';
+async function getStream(filePath) {
+    return new Promise((resolve, reject) => {
+        const stream = fs.createReadStream(filePath);
+        stream.on('open', () => resolve(stream));
+        stream.on('error', error => reject(error));
+    });
+}
+
+async function clone() {
+    const voiceClonesDir = path.join(__dirname, '../public/voice_clones');
     const audioFiles = fs.readdirSync(voiceClonesDir);
     const voiceIdMap = {};
-    let count = 0;
 
     for (const file of audioFiles) {
-        count++;
         const filePath = path.join(voiceClonesDir, file);
-        const fileData = fs.readFileSync(filePath);
 
-        console.log(`Cloning ${file.split('.')[0]} Voice`);
+        try {
+            const fileStream = await getStream(filePath);
+            console.log(`Preparing to clone ${file.split('.')[0]} voice`);
 
-        const addUrl = "https://api.elevenlabs.io/v1/voices/add";
-        const headers = {
-            "Accept": "application/json",
-            "xi-api-key":"" // Assuming EL_TOKEN is stored as an environment variable
-        };
+            const addUrl = "https://api.elevenlabs.io/v1/voices/add";
+            const formData = new FormData();
+            formData.append('files', fs.createReadStream(filePath));
+            formData.append('name', file);
+            formData.append('labels', JSON.stringify({ accent: "American" }));
+            formData.append('description', `Cloned from ${file}`);
 
-        const data = {
-            name: file,
-            labels: '{"accent": "American"}',
-            description: `Cloned from ${file}`
-        };
-
-        const formData = new FormData();
-        formData.append('files', fileData, file);
-
-        axios.post(addUrl, formData, {
-            headers: {
-                ...headers,
-                ...formData.getHeaders()
-            },
-            data: data
-        })
-        .then(response => {
+            const response = await axios.post(addUrl, formData, {
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'multipart/form-data',
+                    'xi-api-key': process.env.ELEVEN_LABS, // Ideally use process.env.EL_TOKEN for security
+                    ...formData.getHeaders()
+                },
+                timeout: 30000
+            });
+            console.log("what is the response??");
+            console.log(response);
+           
             if (response.status === 200) {
                 const clonedVoiceId = response.data.voice_id;
                 voiceIdMap[file.split('.')[0]] = clonedVoiceId;
+                console.log(`Successfully cloned ${file.split('.')[0]}: ID ${clonedVoiceId}`);
             } else {
                 console.error(`Failed to clone ${file}: HTTP status code ${response.status}`);
             }
-        })
-        .catch(error => {
-            console.error(`Failed to clone ${file}: ${error.message}`);
-        });
+        } catch (error) {
+            console.error(`Error while cloning ${file}: ${error.message}`);
+        }
     }
 
-    if (count === audioFiles.length && count !== 0) {
-        console.log("Cloned all the voices.");
-        return voiceIdMap;
-    }
+    console.log("Completed cloning all voices.");
+    console.log("Voice ID Map:", voiceIdMap);
+    return voiceIdMap;
 }
+
+
+
+
 
 module.exports = { clone };

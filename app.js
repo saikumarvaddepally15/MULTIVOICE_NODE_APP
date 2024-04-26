@@ -5,9 +5,11 @@ const path = require('path');
 const axios = require('axios');
 const { initSessionState, voiceFolder } = require('./routes/utils');
 const { credentials } = require('./routes/credentials');
-const { extractAudio, generateAudio } =  require('./routes/audiohandler');
+const { extractAudio} =  require('./routes/audiohandler');
 const { clone } = require('./routes/voiceclone');
 const { translation } = require('./routes/translate');
+const {generateAudio}=require('./routes/replaceAudio');
+const session = require('express-session');
 
 const app = express();
 const PORT = process.env.PORT || 3006;
@@ -23,6 +25,13 @@ initSessionState();
 
 // Set page configuration
 app.locals.title = "Multivoice";
+
+app.use(session({
+    secret: 'changeThisToARandomSecretBeforeDeployment', // Change this secret in a real app
+    resave: false,
+    saveUninitialized: true,
+    cookie: { secure: 'auto', maxAge: 24 * 60 * 60 * 1000 } // Adjust settings according to your security requirements
+  }));
 
 // Routes
 app.post('/credentials', credentials);
@@ -48,8 +57,9 @@ app.post('/upload',  async (req, res) => {
         audioFile.mv(audioFilePath);
         jsonFile.mv(jsonFilePath);
         // Store file paths in session state
-        //req.session.jsonFilePath = jsonFilePath;
-        //req.session.audioFilePath = audioFilePath;
+        req.session.jsonFilePath = jsonFilePath;
+        req.session.audioFilePath = audioFilePath;
+        req.session.openaiToken=process.env.OPEN_AI;
         //var jsonData;
         //var jsonData;
         const jsonString = fs.readFileSync(jsonFilePath, 'utf8');
@@ -63,49 +73,76 @@ app.post('/upload',  async (req, res) => {
      
 
         // Clone voices
-        await clone();
-    
+         const voiceID= await clone();
+         console.log("app.js voice ID--------------"+ JSON.stringify(voiceID));
+        await translate(req,res,JSON.stringify(voiceID));
+       // await generateAudio2(req,res);
+     //  await generateAudio(req.session.dialogueTranslated,audioFilePath);
+
 
         res.status(200).send('Files uploaded and processed successfully');
     } catch (error) {
         console.error(error);
         res.status(500).send('Internal server error');
     }
+    
+    
 });
-
-app.post('/translate', async (req, res) => {
+const translate= async (req, res,voiceID) => {
     try {
-        const selectedLang = req.body.selected_lang;
+        console.log("inside transalte function"+ voiceID);
+        const selectedLang = req.body.selected_lang || "Spanish";
+        const jsonFile = req.files?.json_file;
+        const audioFile = req.files?.audio_file;
+        const audioFilePath = path.join(__dirname, '/public/data', audioFile.name);
+        const jsonFilePath = path.join(__dirname, '/public/data', jsonFile.name);
 
+       
+     
         // Perform translation
-        const translations = await translation(req.session.jsonFilePath, selectedLang, req.session.openaiToken);
-
+        const translations = await translation(req.session.jsonFilePath, selectedLang);
+       // console.log("what is there in translations??????");
+       // console.log("here are translations"+translations);
         // Store translated dialogues in session state
-        req.session.dialogueTranslated = translations;
+         // Ensure translations is an array
+         //const jsonArray = JSON.parse(`[${translations}]`);
+         const jsonArray=translations;
+         //const formattedTranslations = Array.isArray(translations) ? translations : [translations];
 
-        res.status(200).send('Dialogues translated successfully');
+         // Store translated dialogues in session state
+         //req.session.dialogueTranslated = formattedTranslations;
+        
+        //console.log(jsonArray);
+        //const audioFilePath = path.join(__dirname,'/public/data', '');
+       // console.log("app.js translation"+req.session.dialogueTranslated);
+        await generateAudio(audioFilePath,jsonArray,voiceID);
+        //res.status(200).send('Dialogues translated successfully');
+    } catch (error) {
+        console.error(error);
+        throw new Error(error);
+        //res.status(500).send('Internal server error');
+    }
+};
+app.post('/translate',translate);
+
+
+
+async function generateAudio2  (req, res) {
+    try {
+        // Generate audio
+        await generateAudio(req.session.dialogueTranslated);
+
+        // Send generated audio file
+        const audioFilePath = path.join(__dirname, 'output.mp3');
+        res.sendFile(audioFilePath);
     } catch (error) {
         console.error(error);
         res.status(500).send('Internal server error');
     }
-});
-
-// async function generateAudio  (req, res) {
-//     try {
-//         // Generate audio
-//         await generateAudio(req.session.dialogueTranslated);
-
-//         // Send generated audio file
-//         const audioFilePath = path.join(__dirname, 'output.mp3');
-//         res.sendFile(audioFilePath);
-//     } catch (error) {
-//         console.error(error);
-//         res.status(500).send('Internal server error');
-//     }
-// };
-// app.get('/get',async(req,res)=>{
-//     res.send("Its working");
-// })
+};
+app.get('/get',async(req,res)=>{
+    res.send("Its working");
+})
 
 // Start server
 app.listen(PORT, () => {

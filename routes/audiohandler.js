@@ -1,6 +1,9 @@
 const fs = require('fs');
 const path = require('path');
 const ffmpeg = require('fluent-ffmpeg');
+const {tts} = require('./tts');
+
+
 
 async function extractAudio(segmentsData, outputDir, audioFilePath) {
     const userAudioMap = new Map(); // Map to store user-wise audio segments
@@ -52,7 +55,7 @@ async function extractAudio(segmentsData, outputDir, audioFilePath) {
         }
 
         // Merge temporary files into a single output file for the user
-        const outputFileName = `${user}_merged.mp3`;
+        const outputFileName = `${user}.mp3`;
         const outputPath = path.join(outputDir, outputFileName);
 
         await mergeAudioFiles(tempFiles, outputPath);
@@ -96,30 +99,62 @@ function millisecondsToFFmpegTime(milliseconds) {
 }
 
 
+// function mapUsers(jsonArray, userMap) {
+//     console.log('Original JSON:', JSON.stringify(jsonArray));
+  
+//     jsonArray.forEach(item => {
+//       const userKey = `${item.user}`;
+  
+//       if (userMap.hasOwnProperty(userKey)) {
+//         console.log(`Mapping found for ${item.user}: ${userMap[userKey]}`);
+//         item.user = userMap[userKey];
+//       } else {
+//         console.warn(`No mapping found for user: ${item.user} (looking for ${userKey})`);
+//       }
+//     });
+  
+//     console.log('Updated JSON:', JSON.stringify(jsonArray));
+//     return jsonArray;
+//   }
+  
 
-async function generateAudio(dialogsJson, outputFilePath, audioFilePath) {
-    const dialogs = JSON.parse(dialogsJson);
-    let prevEnd = 0;
-    let tempFiles = [];
-    for (const dialog of dialogs) {
-        const { start_time: start, end_time: end, user, text } = dialog;
-        const ttsAudioPath = await tts(user, text); // Assuming this function exists and returns the path to the TTS audio file
-        // Generate silence audio for the gap
-        if (start > prevEnd) {
-            const silenceFilePath = `silence_${prevEnd}_${start}.mp3`;
-            // Generate silence file here or handle gap as per your requirement
-            tempFiles.push({ start: prevEnd, end: start, path: silenceFilePath });
+// Assuming tts is an asynchronous function that takes a userID and text, and generates audio
+
+async function generateAudio(translatedDialogJson,audioOutputDir,userMap) {
+    try {
+        // Step 1: Read the JSON file
+        const dialogs = JSON.stringify(translatedDialogJson);
+
+        // Step 2: Update the JSON data with the new user IDs from userMap
+        const updatedDialogs = dialogs.userMap(dialog => ({
+            ...dialog,
+            user: userMap[dialog.user] || dialog.user // Update user ID or keep original if not in map
+        }));
+        console.log("Updated dialogs"+JSON.stringify(updatedDialogs));
+
+        // Optionally save the updated JSON data back to a file
+        // await fs.writeFile(jsonFilePath, JSON.stringify(updatedDialogs, null, 2), 'utf8');
+
+        // Step 3: Iterate over the updated dialogs and generate audio using tts function
+        for (const dialog of updatedDialogs) {
+            const { user, text } = dialog;
+            console.log(`Processing text for user ${user}`);
+
+            // Generate audio using the tts function
+            // Assuming tts returns a Promise<void> and actually saves the audio file
+            await tts(user, text, path.join(audioOutputDir, `${user}.mp3`));
         }
-        tempFiles.push({ start, end, path: ttsAudioPath });
-        prevEnd = end;
-    }
-    
-    // Add original audio outside dialogues to the tempFiles array (if any)
-    // Assuming audioFilePath points to the original audio
-    tempFiles.push({ start: prevEnd, end: Infinity, path: audioFilePath });
 
-    // Combine all audio parts including original audio outside dialogues
-    await combineAudioFiles(tempFiles, outputFilePath);
+        console.log('All audio files have been generated successfully.');
+    } catch (error) {
+        console.error('An error occurred:', error);
+    }
 }
 
-module.exports = { extractAudio, generateAudio };
+async function getUserText(userId) {
+    // Assuming the JSON file is already loaded into memory as jsonData
+    const dialog = jsonData.find(item => item.user === userId);
+    return dialog ? dialog.text : null;
+}
+
+module.exports = { extractAudio};
